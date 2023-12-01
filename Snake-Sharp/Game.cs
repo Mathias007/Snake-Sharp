@@ -1,146 +1,105 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading;
-
-class Game
+﻿class SnakeGame
 {
-    private int screenWidth;
-    private int screenHeight;
-    private Random randomNumber;
-    private Pixel head;
-    private List<int> teljePositie;
-    private string obstacle;
-    private int obstacleXPos;
-    private int obstacleYPos;
-    private int score;
+    private static readonly Position Origin = new Position(0, 0);
 
-    public Game(int screenWidth, int screenHeight, Random randomNumber, Pixel head, List<int> teljePositie, string obstacle, int obstacleXPos, int obstacleYPos, int score)
+    private Direction _currentDirection;
+    private Direction _nextDirection;
+    private Snake _snake;
+    private Apple _apple;
+
+    public SnakeGame()
     {
-        this.screenWidth = screenWidth;
-        this.screenHeight = screenHeight;
-        this.randomNumber = randomNumber;
-        this.head = head;
-        this.teljePositie = teljePositie;
-        this.obstacle = obstacle;
-        this.obstacleXPos = obstacleXPos;
-        this.obstacleYPos = obstacleYPos;
-        this.score = score;
+        _snake = new Snake(Origin, initialSize: 5);
+        _apple = CreateApple();
+        _currentDirection = Direction.Right;
+        _nextDirection = Direction.Right;
     }
 
-    public void Run()
+    public bool GameOver => _snake.Dead;
+
+    public void OnKeyPress(ConsoleKey key)
     {
-        while (true)
+        Direction newDirection;
+
+        switch (key)
         {
-            Console.Clear();
+            case ConsoleKey.W:
+                newDirection = Direction.Up;
+                break;
 
-            // Draw Obstacle
-            Console.ForegroundColor = ConsoleColor.Cyan;
-            Console.SetCursorPosition(obstacleXPos, obstacleYPos);
-            Console.Write(obstacle);
+            case ConsoleKey.A:
+                newDirection = Direction.Left;
+                break;
 
-            // Draw Snake
-            Console.ForegroundColor = ConsoleColor.Green;
-            Console.SetCursorPosition(head.xPos, head.yPos);
-            Console.Write("■");
+            case ConsoleKey.S:
+                newDirection = Direction.Down;
+                break;
 
-            Console.ForegroundColor = ConsoleColor.White;
-            for (int i = 0; i < screenWidth; i++)
-            {
-                Console.SetCursorPosition(i, 0);
-                Console.Write("■");
-            }
+            case ConsoleKey.D:
+                newDirection = Direction.Right;
+                break;
 
-            for (int i = 0; i < screenWidth; i++)
-            {
-                Console.SetCursorPosition(i, screenHeight - 1);
-                Console.Write("■");
-            }
-
-            for (int i = 0; i < screenHeight; i++)
-            {
-                Console.SetCursorPosition(0, i);
-                Console.Write("■");
-            }
-
-            for (int i = 0; i < screenHeight; i++)
-            {
-                Console.SetCursorPosition(screenWidth - 1, i);
-                Console.Write("■");
-            }
-
-            Console.ForegroundColor = ConsoleColor.White;
-            Console.WriteLine("Score: " + score);
-
-            Console.Write("H");
-
-            for (int i = 0; i < teljePositie.Count(); i += 2)
-            {
-                Console.SetCursorPosition(teljePositie[i], teljePositie[i + 1]);
-                Console.Write("■");
-            }
-
-            //Game Logic
-            ConsoleKeyInfo info = Console.ReadKey();
-            switch (info.Key)
-            {
-                case ConsoleKey.UpArrow:
-                    head.yPos--;
-                    break;
-                case ConsoleKey.DownArrow:
-                    head.yPos++;
-                    break;
-                case ConsoleKey.LeftArrow:
-                    head.xPos--;
-                    break;
-                case ConsoleKey.RightArrow:
-                    head.xPos++;
-                    break;
-            }
-
-            // Collision with Obstacle
-            if (head.xPos == obstacleXPos && head.yPos == obstacleYPos)
-            {
-                score++;
-                obstacleXPos = randomNumber.Next(1, screenWidth);
-                obstacleYPos = randomNumber.Next(1, screenHeight);
-            }
-
-            teljePositie.Insert(0, head.xPos);
-            teljePositie.Insert(1, head.yPos);
-
-            teljePositie.RemoveAt(teljePositie.Count - 1);
-            teljePositie.RemoveAt(teljePositie.Count - 1);
-
-            // Collision with Walls or Itself
-            if (head.xPos == 0 || head.xPos == screenWidth - 1 || head.yPos == 0 || head.yPos == screenHeight - 1)
-            {
-                Console.Clear();
-                Console.ForegroundColor = ConsoleColor.Red;
-                Console.SetCursorPosition(screenWidth / 5, screenHeight / 2);
-                Console.WriteLine("Game Over");
-                Console.SetCursorPosition(screenWidth / 5, screenHeight / 2 + 1);
-                Console.WriteLine("Your Score is: " + score);
-                Console.SetCursorPosition(screenWidth / 5, screenHeight / 2 + 2);
-                Environment.Exit(0);
-            }
-
-            for (int i = 0; i < teljePositie.Count(); i += 2)
-            {
-                if (head.xPos == teljePositie[i] && head.yPos == teljePositie[i + 1])
-                {
-                    Console.Clear();
-                    Console.ForegroundColor = ConsoleColor.Red;
-                    Console.SetCursorPosition(screenWidth / 5, screenHeight / 2);
-                    Console.WriteLine("Game Over");
-                    Console.SetCursorPosition(screenWidth / 5, screenHeight / 2 + 1);
-                    Console.WriteLine("Your Score is: " + score);
-                    Console.SetCursorPosition(screenWidth / 5, screenHeight / 2 + 2);
-                    Environment.Exit(0);
-                }
-            }
-
-            Thread.Sleep(50);
+            default:
+                return;
         }
+
+        // Snake cannot turn 180 degrees.
+        if (newDirection == OppositeDirectionTo(_currentDirection))
+        {
+            return;
+        }
+
+        _nextDirection = newDirection;
+    }
+
+    public void OnGameTick()
+    {
+        if (GameOver) throw new InvalidOperationException();
+
+        _currentDirection = _nextDirection;
+        _snake.Move(_currentDirection);
+
+        // If the snake's head moves to the same position as an apple, the snake
+        // eats it.
+        if (_snake.Head.Equals(_apple.Position))
+        {
+            _snake.Grow();
+            _apple = CreateApple();
+        }
+    }
+
+    public void Render()
+    {
+        Console.Clear();
+        _snake.Render();
+        _apple.Render();
+        Console.SetCursorPosition(0, 0);
+    }
+
+    private static Direction OppositeDirectionTo(Direction direction)
+    {
+        switch (direction)
+        {
+            case Direction.Up: return Direction.Down;
+            case Direction.Left: return Direction.Right;
+            case Direction.Right: return Direction.Left;
+            case Direction.Down: return Direction.Up;
+            default: throw new ArgumentOutOfRangeException();
+        }
+    }
+
+    private static Apple CreateApple()
+    {
+        // Can be factored elsewhere.
+        const int numberOfRows = 20;
+        const int numberOfColumns = 20;
+
+        var random = new Random();
+        var top = random.Next(0, numberOfRows + 1);
+        var left = random.Next(0, numberOfColumns + 1);
+        var position = new Position(top, left);
+        var apple = new Apple(position);
+
+        return apple;
     }
 }
