@@ -1,38 +1,74 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
+using System.Threading.Tasks;
 
-class Program
+public static class Program
 {
-    static void Main()
+    public static async Task Main(string[] args)
     {
-        Console.WindowHeight = 16;
-        Console.WindowWidth = 32;
+        var tickRate = TimeSpan.FromMilliseconds(100);
+        var snakeGame = new SnakeGame();
 
-        int screenWidth = Console.WindowWidth;
-        int screenHeight = Console.WindowHeight;
+        using (var cts = new CancellationTokenSource())
+        {
+            async Task MonitorKeyPresses()
+            {
+                while (!cts.Token.IsCancellationRequested)
+                {
+                    if (Console.KeyAvailable)
+                    {
+                        var key = Console.ReadKey(intercept: true).Key;
+                        snakeGame.OnKeyPress(key);
+                    }
 
-        Random randomNumber = new Random();
+                    await Task.Delay(10);
+                }
+            }
 
-        Pixel head = new Pixel();
-        head.xPos = screenWidth / 2;
-        head.yPos = screenHeight / 2;
-        head.schermKleur = ConsoleColor.Red;
+            var monitorKeyPresses = MonitorKeyPresses();
 
-        List<int> teljePositie = new List<int>();
+            do
+            {
+                snakeGame.OnGameTick();
+                snakeGame.Render();
+                await Task.Delay(tickRate);
+            } while (!snakeGame.GameOver);
 
-        teljePositie.Add(head.xPos);
-        teljePositie.Add(head.yPos);
+            for (var i = 0; i < 3; i++)
+            {
+                Console.Clear();
+                await Task.Delay(500);
+                snakeGame.Render();
+                await Task.Delay(500);
+            }
 
-        DateTime time = DateTime.Now;
-        string obstacle = "*";
-
-        int obstacleXPos = randomNumber.Next(1, screenWidth);
-        int obstacleYPos = randomNumber.Next(1, screenHeight);
-
-        int score = 0;
-
-        Game game = new Game(screenWidth, screenHeight, randomNumber, head, teljePositie, obstacle, obstacleXPos, obstacleYPos, score);
-        game.Run();
+            cts.Cancel();
+            await monitorKeyPresses;
+        }
     }
+}
+
+enum Direction
+{
+    Up,
+    Down,
+    Left,
+    Right
+}
+
+
+readonly struct Position
+{
+    public Position(int top, int left)
+    {
+        Top = top;
+        Left = left;
+    }
+    public int Top { get; }
+    public int Left { get; }
+
+    public Position RightBy(int n) => new Position(Top, Left + n);
+    public Position DownBy(int n) => new Position(Top + n, Left);
 }
